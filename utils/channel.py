@@ -637,7 +637,8 @@ def write_channel_to_file(data, ipv6=False, callback=None):
         content = ""
         for cate, channel_obj in data.items():
             print(f"\n{cate}:", end=" ")
-            content += f"{'\n\n' if not first_cate else ''}{cate},#genre#"
+            double_enter = '\n\n'
+            content += f"{double_enter if not first_cate else ''}{cate},#genre#"
             first_cate = False
             channel_obj_keys = channel_obj.keys()
             names_len = len(list(channel_obj_keys))

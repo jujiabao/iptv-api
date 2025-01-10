@@ -1,8 +1,9 @@
 # 这是订阅源列表，每行一个订阅地址
 # This is a list of subscription sources, with one subscription address per line
 
+https://raw.githubusercontent.com/iptv-org/iptv/gh-pages/countries/cn.m3u
+https://raw.githubusercontent.com/iptv-org/iptv/master/streams/cn.m3u
 https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv6.m3u
-https://raw.githubusercontent.com/joevess/IPTV/main/home.m3u8
 https://raw.githubusercontent.com/kimwang1978/collect-tv-txt/main/merged_output.txt
 https://raw.githubusercontent.com/xzw832/cmys/main/S_CCTV.txt
 https://raw.githubusercontent.com/xzw832/cmys/main/S_weishi.txt
@@ -10,10 +11,7 @@ https://raw.githubusercontent.com/asdjkl6/tv/tv/.m3u/整套直播源/测试/整�
 https://raw.githubusercontent.com/asdjkl6/tv/tv/.m3u/整套直播源/测试/整套直播源/kk.txt
 https://raw.githubusercontent.com/yuanzl77/IPTV/master/live.txt
 https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
-https://raw.githubusercontent.com/iptv-org/iptv/gh-pages/countries/cn.m3u
-https://raw.githubusercontent.com/iptv-org/iptv/master/streams/cn.m3u
 https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv6.txt
 https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.txt
 https://raw.githubusercontent.com/YueChan/Live/main/APTV.m3u
 https://raw.githubusercontent.com/YanG-1989/m3u/main/Gather.m3u
-https://raw.githubusercontent.com/yuanzl77/IPTV/main/live.txt

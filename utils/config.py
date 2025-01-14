@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import sys
+from collections import defaultdict
 
 
 def resource_path(relative_path, persistent=False):
@@ -315,6 +316,34 @@ class ConfigManager:
     def time_zone(self):
         return self.config.get("Settings", "time_zone", fallback="Asia/Shanghai")
 
+    @property
+    def top_tv_box_file(self):
+        return self.config.get("Settings", "top_tv_box_file", fallback="output/data.json")
+
+    @property
+    def gitee_access_token(self):
+        return self.config.get("Settings", "gitee_access_token", fallback="")
+
+    @property
+    def gitee_file_sha_url(self):
+        return self.config.get("Settings", "gitee_file_sha_url", fallback="")
+
+    @property
+    def jellyfin_file(self):
+        return self.config.get("Settings", "jellyfin_file", fallback="output/jellyfin.m3u")
+
+    @property
+    def tv_box_file(self):
+        return self.config.get("Settings", "tv_box_file", fallback="output/tvbox_lives.json")
+
+    @property
+    def tv_box_demo_file(self):
+        return self.config.get("Settings", "tv_box_demo_file", fallback="config/tvbox_demo.json")
+
+    @property
+    def tv_box_json_demo_file(self):
+        return self.config.get("Settings", "tv_box_json_demo_file", fallback="output/tvbox.json")
+
     def load(self):
         """
         Load the config
@@ -329,6 +358,35 @@ class ConfigManager:
                 with open(config_file, "r", encoding="utf-8") as f:
                     self.config.read_file(f)
                 break
+        self.replace_placeholders()
+
+    def replace_placeholders(self):
+        """
+        Replace placeholders like ${key} with actual values from the config.
+        配置文件中占位符替换
+        """
+        placeholder_pattern = re.compile(r'\${(\w+)\}')
+
+        # Create a dictionary that includes both DEFAULT and other sections
+        all_options = defaultdict(dict)
+        for section in self.config.sections():
+            all_options.update(self.config.items(section))
+        all_options.update(self.config.defaults())  # Add DEFAULT section items
+
+        for section in self.config.sections():
+            for option in self.config.options(section):
+                value = self.config.get(section, option)
+
+                # Substitute all placeholders in the value
+                def replacer(match):
+                    key = match.group(1)
+                    if key in all_options:
+                        return all_options[key]
+                    else:
+                        raise ValueError(f"Placeholder '${key}' not found.")
+
+                new_value = placeholder_pattern.sub(replacer, value)
+                self.config.set(section, option, new_value)
 
     def set(self, section, key, value):
         """

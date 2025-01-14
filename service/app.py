@@ -36,6 +36,16 @@ def show_content():
     return get_result_file_content(show_content=True)
 
 
+@app.route("/jellyfin")
+def show_jellyfin():
+    return get_result_file_content(file_type="jellyfin")
+
+
+@app.route("/toptvbox")
+def show_toptvbox():
+    return get_result_file_content(file_type="toptvbox")
+
+
 @app.route("/log")
 def show_log():
     log_path = resource_path(constants.sort_log_path)

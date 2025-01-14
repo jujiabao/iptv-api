@@ -9,8 +9,10 @@ import socket
 import sys
 import urllib.parse
 from collections import defaultdict
+from dataclasses import dataclass, field, asdict
 from logging.handlers import RotatingFileHandler
 from time import time
+from typing import Optional, List
 
 import pytz
 import requests
@@ -388,20 +390,215 @@ def convert_to_m3u(first_channel_name=None):
             print(f"✅ M3U result file generated at: {m3u_file_path}")
 
 
+def convert_to_jellyfin_m3u(first_channel_name=None):
+    """
+    Convert result txt to m3u format
+    只保留一条channel数据，并且去除时间更新的字段
+    """
+    user_final_file = resource_path(config.final_file)
+    if os.path.exists(user_final_file):
+        with open(user_final_file, "r", encoding="utf-8") as file:
+            m3u_output = '#EXTM3U x-tvg-url="https://raw.githubusercontent.com/fanmingming/live/main/e.xml"\n'
+            current_group = None
+            exist_channel_name_list = []
+            for line in file:
+                trimmed_line = line.strip()
+                if trimmed_line != "":
+                    if "#genre#" in trimmed_line:
+                        current_group = trimmed_line.replace(",#genre#", "").strip()
+                        # 去除更新时间
+                        if current_group.find("更新时间") > -1:
+                            current_group = None
+                            continue
+                    else:
+                        if current_group is None:
+                            continue
+                        try:
+                            original_channel_name, _, channel_link = map(
+                                str.strip, trimmed_line.partition(",")
+                            )
+                        except:
+                            continue
+                        processed_channel_name = re.sub(
+                            r"(CCTV|CETV)-(\d+)(\+.*)?",
+                            lambda m: f"{m.group(1)}{m.group(2)}"
+                                      + ("+" if m.group(3) else ""),
+                            first_channel_name if current_group == "🕘️更新时间" else original_channel_name,
+                        )
+                        # 去除一致的，只取第一个频道
+                        if processed_channel_name not in exist_channel_name_list:
+                            exist_channel_name_list.append(processed_channel_name)
+                        else:
+                            continue
+                        m3u_output += f'#EXTINF:-1 tvg-name="{processed_channel_name}" tvg-logo="https://raw.githubusercontent.com/fanmingming/live/main/tv/{processed_channel_name}.png"'
+                        if current_group:
+                            m3u_output += f' group-title="{current_group}"'
+                        m3u_output += f",{original_channel_name}\n{channel_link}\n"
+            m3u_file_path = resource_path(config.jellyfin_file)
+            with open(m3u_file_path, "w", encoding="utf-8") as m3u_file:
+                m3u_file.write(m3u_output)
+            print(f"✅ Save One M3U result file generated at: {m3u_file_path}")
+
+
+def convert_to_toptvbox_json(first_channel_name=None):
+    """
+    Convert result txt to json format
+    将txt数据转换为top_tv_box的app所需的json文件
+    """
+    user_final_file = resource_path(config.final_file)
+    if os.path.exists(user_final_file):
+        with open(user_final_file, "r", encoding="utf-8") as file:
+            current_group = None
+            update_time = None
+            channel_info_map = {}
+            index = 0
+            for line in file:
+                trimmed_line = line.strip()
+                if trimmed_line != "":
+                    if "#genre#" in trimmed_line:
+                        current_group = trimmed_line.replace(",#genre#", "").strip()
+                    else:
+                        try:
+                            original_channel_name, _, channel_link = map(
+                                str.strip, trimmed_line.partition(",")
+                            )
+                        except:
+                            continue
+                        # 保存更新时间
+                        if current_group.find("更新时间") > -1:
+                            update_time = original_channel_name
+                            continue
+                        processed_channel_name = re.sub(
+                            r"(CCTV|CETV)-(\d+)(\+.*)?",
+                            lambda m: f"{m.group(1)}{m.group(2)}" + ("+" if m.group(3) else ""),
+                            first_channel_name if current_group == "🕘️更新时间" else original_channel_name,
+                        )
+                        logo_url = f"https://raw.githubusercontent.com/fanmingming/live/main/tv/{processed_channel_name}.png"
+                        live_url = f"{channel_link}"
+                        if processed_channel_name not in channel_info_map:
+                            top_tv_box_bean = TopTvBoxDataBean(id=(index := index + 1),
+                                                               tvName=processed_channel_name,
+                                                               url=live_url,
+                                                               category=current_group,
+                                                               status=1,
+                                                               updateTime=update_time,
+                                                               version=update_time,
+                                                               logoUrl=logo_url,
+                                                               bakUrl=[])
+                            channel_info_map[processed_channel_name] = top_tv_box_bean
+                        else:
+                            top_tv_box_bean = channel_info_map.get(processed_channel_name)
+                            top_tv_box_bean.bakUrl.append(live_url)
+            channel_info = []
+            for result in channel_info_map:
+                channel_info.append(channel_info_map.get(result).to_dict())
+
+            data_file_path = resource_path(config.top_tv_box_file)
+            if len(channel_info) > 0:
+                data = json.dumps(channel_info, indent=4, ensure_ascii=False)
+                with open(data_file_path, "w", encoding="utf-8") as data_file:
+                    data_file.write(data)
+                print(f"✅ TopTvBox result file generated at: {data_file_path}")
+                return 1
+            else:
+                print(f"❌ dont create TopTvBox result file generated at: {data_file_path}, data is null")
+                return 0
+    return 0
+
+
+def convert_to_tvbox_json(first_channel_name=None):
+    """
+    Convert result txt to json format
+    将txt数据转换为tv_box的app所需的json文件，带有具体的直播地址
+    """
+    user_final_file = resource_path(config.final_file)
+    if os.path.exists(user_final_file):
+        with open(user_final_file, "r", encoding="utf-8") as file:
+            current_group = None
+            update_time = None
+            # 分组信息，key-分组名；value-map(key-频道名称；value-直播地址list)
+            group_info_map = {}
+            for line in file:
+                trimmed_line = line.strip()
+                if trimmed_line != "":
+                    if "#genre#" in trimmed_line:
+                        current_group = trimmed_line.replace(",#genre#", "").strip()
+                        group_info_map[current_group] = {}
+                    else:
+                        try:
+                            original_channel_name, _, channel_link = map(
+                                str.strip, trimmed_line.partition(",")
+                            )
+                        except:
+                            continue
+                        processed_channel_name = re.sub(
+                            r"(CCTV|CETV)-(\d+)(\+.*)?",
+                            lambda m: f"{m.group(1)}{m.group(2)}" + ("+" if m.group(3) else ""),
+                            first_channel_name if current_group == "🕘️更新时间" else original_channel_name,
+                        )
+
+                        # 更新时间设定
+                        if current_group.find("更新时间") > -1:
+                            update_time = original_channel_name
+
+                        live_url = f"{channel_link}"
+                        channel_list = group_info_map[current_group].get(processed_channel_name, [])
+                        channel_list.append(live_url)
+                        group_info_map[current_group][processed_channel_name] = channel_list
+            if len(group_info_map) == 0:
+                print(f"❌ dont create TvBox result file, data is null")
+                return 0
+            # 重组tvbox文件
+            result = []
+            for group in group_info_map:
+                channels = []
+                for channel in group_info_map[group]:
+                    inner_tv_box_data_bean = TvBoxDataBean.InnerTvBoxDataBean(name=channel, urls=group_info_map[group][channel]).to_dict()
+                    channels.append(inner_tv_box_data_bean)
+                result.append(TvBoxDataBean(group=group, channels=channels, updateTime=update_time).to_dict())
+
+            # 按照tvbox模版文件生成具体的json文件
+            demo_file_path = resource_path(config.tv_box_demo_file)
+            if not os.path.exists(demo_file_path):
+                print(f"❌ dont create TvBox result file, demo file is not exist: {demo_file_path}")
+                return 0
+            with open(demo_file_path, "r", encoding="utf-8") as file:
+                demo_content = file.read()
+                if len(demo_content) == 0:
+                    print(f"❌ dont create TvBox result file, demo file is empty: {demo_file_path}")
+                    return 0
+            demo_content_dict = json.loads(demo_content)
+            demo_content_dict["lives"] = result
+            # 生成json文件
+            data_file_path = resource_path(config.tv_box_file)
+            if len(result) > 0:
+                data = json.dumps(demo_content_dict, indent=4, ensure_ascii=False)
+                with open(data_file_path, "w", encoding="utf-8") as data_file:
+                    data_file.write(data)
+                print(f"✅ TvBox result file generated at: {data_file_path}")
+                return 1
+            else:
+                print(f"❌ dont create TvBox result file generated at: {data_file_path}, data is null")
+                return 0
+    return 0
+
+
 def get_result_file_content(show_content=False, file_type=None):
     """
     Get the content of the result file
     """
     user_final_file = resource_path(config.final_file)
-    result_file = (
-        os.path.splitext(user_final_file)[0] + f".{file_type}"
-        if file_type
-        else user_final_file
-    )
-    if os.path.exists(result_file):
+    result_file = None
+    if os.path.exists(user_final_file):
         if config.open_m3u_result:
             if file_type == "m3u" or not file_type:
                 result_file = os.path.splitext(user_final_file)[0] + ".m3u"
+            if file_type == "txt":
+                result_file = os.path.splitext(user_final_file)[0] + ".txt"
+            if file_type == "jellyfin":
+                result_file = resource_path(config.jellyfin_file)
+            if file_type == "toptvbox":
+                result_file = resource_path(config.top_tv_box_file)
             if file_type != "txt" and show_content == False:
                 return send_file(result_file, as_attachment=True)
         with open(result_file, "r", encoding="utf-8") as file:
@@ -602,3 +799,67 @@ def get_version_info():
     """
     with open(resource_path("version.json"), "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+@dataclass
+class TopTvBoxDataBean:
+    """
+    Top TV Box应用定义的bean，包含了与TV盒子相关的基本信息。
+    """
+    id: Optional[int] = None
+    tvName: Optional[str] = None
+    url: Optional[str] = None
+    bakUrl: List[str] = field(default_factory=list)
+    category: Optional[str] = None
+    status: int = 1  # 默认为1，表示正常
+    updateTime: Optional[datetime] = None
+    version: Optional[str] = None
+    logoUrl: Optional[str] = None
+
+    @property
+    def __repr__(self) -> str:
+        return (f"TopTvBoxDataBean(id={self.id}, tvName={self.tvName}, "
+                f"url={self.url}, category={self.category}, status={self.status}, "
+                f"updateTime={self.updateTime}, version={self.version}, logoUrl={self.logoUrl})")
+
+    def to_dict(self):
+        # 使用 __dict__ 来返回对象的所有属性
+        return self.__dict__
+
+
+@dataclass
+class TvBoxDataBean:
+    """
+    TV Box应用定义的bean，包含了与TV盒子相关的基本信息。
+    """
+    group: Optional[str] = None
+    channels: List['TvBoxDataBean.InnerTvBoxDataBean'] = field(default_factory=list)
+    epg: Optional[str] = 'http://epg.51zmt.top:8000/api/diyp/'
+    updateTime: Optional[str] = None
+
+    def __repr__(self):
+        # 生成一个可以用来重新创建对象的字符串
+        dict_representation = asdict(self)
+        class_name = self.__class__.__name__
+        attributes = ', '.join(f'{k}={repr(v)}' for k, v in dict_representation.items())
+        return f'{class_name}({attributes})'
+
+    def to_dict(self):
+        # 使用 __dict__ 来返回对象的所有属性
+        return self.__dict__
+
+    @dataclass
+    class InnerTvBoxDataBean:
+        name: Optional[str] = None
+        urls: List[str] = field(default_factory=list)
+
+        def __repr__(self):
+            # 生成一个可以用来重新创建对象的字符串
+            class_name = self.__class__.__name__
+            attributes = ', '.join(f'{k}={repr(v)}' for k, v in asdict(self).items())
+            return f'{class_name}({attributes})'
+
+        def to_dict(self):
+            # 使用 __dict__ 来返回对象的所有属性
+            return self.__dict__
+

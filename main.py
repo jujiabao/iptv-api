@@ -21,6 +21,11 @@ from utils.channel import (
     format_channel_url_info,
 )
 from utils.config import config
+from utils.gitee import (
+    commit_gitee_toptvbox_file,
+    commit_gitee_tvbox_data_file,
+    commit_gitee_tvbox_json_file
+)
 from utils.tools import (
     update_file,
     get_pbar_remaining,
@@ -31,7 +36,10 @@ from utils.tools import (
     check_ipv6_support,
     resource_path,
     get_urls_from_file,
-    get_version_info
+    get_version_info,
+    convert_to_jellyfin_m3u,
+    convert_to_toptvbox_json,
+    convert_to_tvbox_json
 )
 
 
@@ -174,6 +182,15 @@ class UpdateSource:
                     ) as file:
                         pickle.dump(channel_data_cache, file)
                 convert_to_m3u(channel_names[0])
+                convert_to_jellyfin_m3u(channel_names[0])
+                status = convert_to_toptvbox_json(channel_names[0])
+                if status == 1:
+                    # 提交到top-tv-box、tvbox等数据到gitee
+                    commit_gitee_toptvbox_file()
+                    commit_gitee_tvbox_data_file()
+                status = convert_to_tvbox_json(channel_names[0])
+                if status == 1:
+                    commit_gitee_tvbox_json_file()
                 print(
                     f"🥳 Update completed! Total time spent: {format_interval(time() - main_start_time)}. Please check the {user_final_file} file!"
                 )

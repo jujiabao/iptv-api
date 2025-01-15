@@ -66,9 +66,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
+# 设置TZ上海时区只在python中生效，crontab调用的还是/etc/timezone中的UTC时区
 RUN (crontab -l ; \
-  echo "0 18 * * * cd $APP_WORKDIR && /.venv/bin/python main.py"; \
-  echo "0 6 * * * cd $APP_WORKDIR && /.venv/bin/python main.py") | crontab -
+  echo "0 22 * * * cd $APP_WORKDIR && /.venv/bin/python main.py"; \
+  echo "0 10 * * * cd $APP_WORKDIR && /.venv/bin/python main.py") | crontab -
 
 EXPOSE $APP_PORT
 
